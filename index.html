@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Jump Block</title>
+<meta name="description" content="Todd's winter jump block: gym sessions, guided mobility, weigh-ins and progress. Works offline.">
+<meta name="theme-color" content="#ECF0EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D1311" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jump Block">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preload" href="fonts/barlow-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main>
+  <section class="view" id="v-today"></section>
+  <section class="view" id="v-gym" hidden></section>
+  <section class="view" id="v-mobility" hidden></section>
+  <section class="view" id="v-plan" hidden></section>
+  <section class="view" id="v-progress" hidden></section>
+</main>
+<div class="timer" id="timer" hidden role="timer" aria-live="polite">
+  <div class="in"><div class="tl"><div class="tk" id="timer-k">Rest</div><div class="tv" id="timer-v">0:00</div></div>
+  <button type="button" id="timer-add">+15 s</button><button type="button" id="timer-skip">Skip</button></div>
+</div>
+<nav class="nav" id="nav" aria-label="Sections"></nav>
+<div class="player" id="player" hidden role="dialog" aria-modal="true" aria-label="Routine"></div>
+<div class="toast" id="toast" hidden role="status"></div>
+<noscript><p style="padding:20px">Jump Block needs JavaScript turned on.</p></noscript>
+<script src="program.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
