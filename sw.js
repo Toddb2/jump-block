@@ -1,6 +1,6 @@
 /* Jump Block service worker: caches the whole app so it opens with no signal.
    Bump VERSION whenever any file changes so phones pick up the update. */
-const VERSION = 'jumpblock-1.0.0';
+const VERSION = 'jumpblock-1.1.0';
 const FILES = [
   './', './index.html', './styles.css', './program.js', './app.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png',
