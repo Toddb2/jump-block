@@ -3,7 +3,7 @@
 'use strict';
 const P = window.PROGRAM;
 const {EX, SESSIONS, PHASES, WEEKTYPES, ROUTINES, FUEL} = P;
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const DAY = 864e5;
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -437,7 +437,7 @@ function openPlayer(id, date){
 function closePlayer(){
   clearInterval(PL.iv); PL.iv = null; wakeOff();
   $('#player').hidden = true; $('#player').innerHTML = ''; document.body.style.overflow = '';
-  PL.mode = 'idle'; render(view);
+  PL.mode = 'idle'; render(view); closePlayerHook();
 }
 function startStep(i, first){
   PL.i = i; const st = PL.steps[i]; const prev = PL.steps[i - 1];
@@ -620,7 +620,7 @@ function renderPlan(){
         <div id="restore-confirm"></div>
         <p class="sub">Saved here: ${plural(Object.keys(DB.sessions).length, 'session')}, ${plural(Object.keys(DB.weighins).length, 'weigh-in')}, ${plural(Object.keys(DB.mob).length, 'mobility day')}.</p></section>
       ${isStandalone() ? '' : `<section class="card"><h2 class="h3">Install on your phone</h2>${installEvt ? '<p class="sub">Add Jump Block to your home screen so it opens like an app and works offline.</p><div class="ex-actions"><button type="button" class="btn primary" id="install-btn">Install app</button></div>' : isIOS() ? '<p class="sub">In Safari, tap the Share button, then <b>Add to Home Screen</b>. It then opens full-screen and works offline.</p>' : '<p class="sub">In Chrome, tap the ⋮ menu, then <b>Install app</b> or <b>Add to Home screen</b>. It then works offline.</p>'}</section>`}
-      <p class="meta">Jump Block ${VERSION} · works offline once installed.</p>
+      <div class="row"><p class="meta" style="margin:0">Jump Block ${VERSION} · works offline once installed.</p><span class="spacer"></span><button type="button" class="btn" id="upd-btn">Check for updates</button></div>
     </div>`;
 }
 const planView = $('#v-plan');
@@ -631,6 +631,7 @@ planView.addEventListener('change', ev => {
   if (t.id === 'restore-file' && t.files && t.files[0]) readBackup(t.files[0]);
 });
 planView.addEventListener('click', async ev => {
+  if (ev.target.id === 'upd-btn'){ checkForUpdate(true); return; }
   if (ev.target.id === 'install-btn' && installEvt){ installEvt.prompt(); try { await installEvt.userChoice; } catch (e) {} installEvt = null; renderPlan(); return; }
   const b = ev.target.closest('[data-data]'); if (!b) return;
   const k = b.dataset.data;
@@ -1095,25 +1096,46 @@ function finishDrill(early){
 function closeDrill(){
   clearInterval(DR.iv); DR.iv = null; hush(); wakeOff(); DR.phase = 'idle';
   const el = $('#player'); el.hidden = true; el.classList.remove('drill'); el.innerHTML = ''; document.body.style.overflow = '';
-  render(view);
+  render(view); closePlayerHook();
 }
 
 /* ---------------- Service worker and lifecycle ---------------- */
-let wantReload = false;
+/* Updates: the new service worker activates itself as soon as it has downloaded, then the
+   app reloads into the new version, unless a routine or drill is running, in which case it
+   reloads when that screen is closed. The app checks for updates on launch and whenever it
+   comes back to the foreground. */
+let SWREG = null, hadController = !!(navigator.serviceWorker && navigator.serviceWorker.controller), pendingReload = false, lastCheck = 0;
+const busy = () => (PL.mode !== 'idle' && PL.mode !== 'done') || (DR.phase !== 'idle' && DR.phase !== 'done');
+function applyUpdate(){ if (busy()){ pendingReload = true; toast('Update downloaded. It will apply when you finish this screen.'); return; } flush(); location.reload(); }
+function checkForUpdate(manual){
+  if (!SWREG) { if (manual) toast('Updates work once the app is opened from its web address.'); return Promise.resolve(); }
+  lastCheck = Date.now();
+  return SWREG.update().then(() => {
+    if (SWREG.waiting){ SWREG.waiting.postMessage('skipWaiting'); return; }
+    if (manual && !SWREG.installing) toast('You have the latest version (' + VERSION + ').');
+    else if (manual) toast('Downloading the update…');
+  }).catch(() => { if (manual) toast('Couldn’t check for updates. Are you online?'); });
+}
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
-  navigator.serviceWorker.register('sw.js').then(reg => {
+  navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).then(reg => {
+    SWREG = reg;
+    if (reg.waiting && navigator.serviceWorker.controller) reg.waiting.postMessage('skipWaiting');
     reg.addEventListener('updatefound', () => {
       const nw = reg.installing; if (!nw) return;
-      nw.addEventListener('statechange', () => {
-        if (nw.state === 'installed' && navigator.serviceWorker.controller) toast('A new version is ready.', 'Update', () => { wantReload = true; nw.postMessage('skipWaiting'); });
-      });
+      nw.addEventListener('statechange', () => { if (nw.state === 'installed' && navigator.serviceWorker.controller) nw.postMessage('skipWaiting'); });
     });
+    checkForUpdate(false);
   }).catch(() => {});
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (wantReload){ wantReload = false; location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController){ hadController = true; return; }
+    applyUpdate();
+  });
 }
+function closePlayerHook(){ if (pendingReload){ pendingReload = false; flush(); location.reload(); } }
 let lastDay = today();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden'){ flush(); return; }
+  if (Date.now() - lastCheck > 5 * 60 * 1000) checkForUpdate(false);
   if (wake === null && (PL.mode !== 'idle' || (DR.phase !== 'idle' && DR.phase !== 'done'))) wakeOn();
   if (today() !== lastDay){ lastDay = today(); if (view === 'today' || view === 'mobility') render(view); }
 });
