@@ -305,3 +305,7 @@ details.more summary::-webkit-details-marker{display:none}
 .dstatus{font-size:16px;font-weight:600;color:var(--ink);min-height:1.4em;margin-top:4px}
 @media (prefers-reduced-motion:no-preference){.dcall.flash{animation:dpop .35s ease-out}@keyframes dpop{from{transform:scale(.7);opacity:.3}to{transform:scale(1);opacity:1}}}
 @media (max-height:700px){.courtwrap.live .court{max-width:min(60vw,220px)}.dcall{font-size:clamp(72px,22vw,120px)}}
+.ct-hit rect{fill:var(--ink)}
+.ct-hit text{fill:var(--sand-ink);font-size:9px;font-weight:600;letter-spacing:.1em}
+.ct-side{fill:var(--hot);font-size:10px;font-weight:700;letter-spacing:.1em}
+.seg button{font-size:13px}

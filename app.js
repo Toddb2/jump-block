@@ -3,7 +3,7 @@
 'use strict';
 const P = window.PROGRAM;
 const {EX, SESSIONS, PHASES, WEEKTYPES, ROUTINES, FUEL} = P;
-const VERSION = '1.1.1';
+const VERSION = '1.2.0';
 const DAY = 864e5;
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -39,7 +39,7 @@ const ICON = {
 
 /* ---------------- Store: everything in localStorage on this device ---------------- */
 const KEY = 'jumpblock:v1';
-const blank = () => ({v:1, sessions:{}, weighins:{}, mob:{}, days:{}, settings:{rm:{squat:255, trapbar:null}, weekOverride:{}, drills:{voice:true, sprint:{reps:8, sets:3, interval:20, jitter:2, setRest:120, call:'number', spots:[1,2,3,4,5,6,7,8]}, defence:{reps:8, sets:3, interval:12, jitter:2, setRest:90, hitter:true, groups:['cut','line','angle','short','deep','drive']}}}, drillLog:[], created:Date.now()});
+const blank = () => ({v:1, sessions:{}, weighins:{}, mob:{}, days:{}, settings:{rm:{squat:255, trapbar:null}, weekOverride:{}, drills:{voice:true, sprint:{reps:8, sets:3, interval:20, jitter:2, setRest:120, call:'number', spots:[1,2,3,4,5,6,7,8]}, defence:{reps:8, sets:3, interval:12, jitter:2, setRest:90, hitter:true, side:'alt', groups:['cut','line','angle','short','deep','seam','drive']}}}, drillLog:[], created:Date.now()});
 function loadDB(){
   try {
     const o = JSON.parse(localStorage.getItem(KEY));
@@ -801,20 +801,23 @@ const SPOTS = [
   {n:5, name:'Back right', x:.91, y:.91}, {n:6, name:'Back', x:.5, y:.94}, {n:7, name:'Back left', x:.09, y:.91}, {n:8, name:'Left', x:.06, y:.5}
 ];
 const NUMWORD = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'];
+/* Shots for a hit from the LEFT side of the net (your left as you face it), with the blocker
+   taking line and you starting in the angle pocket. Right-side hits are the mirror image. */
 const SHOTS = [
-  {id:'cutL', group:'cut', name:'Cut left', x:.12, y:.14, how:'Sharp angle short to your left. Drive forward-left, sprawl if you have to.'},
-  {id:'cutR', group:'cut', name:'Cut right', x:.88, y:.14, how:'Sharp angle short to your right. Drive forward-right, sprawl if you have to.'},
-  {id:'lineL', group:'line', name:'Line left', x:.12, y:.9, how:'Deep down the left line. Drop-step, turn and run.'},
-  {id:'lineR', group:'line', name:'Line right', x:.88, y:.9, how:'Deep down the right line. Drop-step, turn and run.'},
-  {id:'angleL', group:'angle', name:'Angle left', x:.16, y:.56, how:'Hard-driven angle to your left. One big step and dig.'},
-  {id:'angleR', group:'angle', name:'Angle right', x:.84, y:.56, how:'Hard-driven angle to your right. One big step and dig.'},
-  {id:'pokie', group:'short', name:'Pokie short', say:'Pokie', x:.5, y:.24, how:'Short push over the block. Explode forward and stay low.'},
-  {id:'rainL', group:'deep', name:'Rainbow left', x:.2, y:.92, how:'High shot over the block, deep left. Turn and sprint.'},
-  {id:'rainR', group:'deep', name:'Rainbow right', x:.8, y:.92, how:'High shot over the block, deep right. Turn and sprint.'},
-  {id:'drive', group:'drive', name:'Hard drive', say:'Drive', x:.5, y:.62, how:'Hit straight at you. Stay low, platform out, dig in place.'}
+  {id:'cut', group:'cut', name:'Cut shot', say:'Cut', x:.9, y:.13, how:'Sharp cross-court, short by the net on the far side. Explode forward.'},
+  {id:'line', group:'line', name:'High line', say:'Line', x:.12, y:.9, how:'Over the block, deep down the hitter’s line. Drop-step, turn and run.'},
+  {id:'angle', group:'angle', name:'Angle', say:'Angle', x:.86, y:.7, how:'Hard-driven cross-court. One big step and dig.'},
+  {id:'pokie', group:'short', name:'Pokie', say:'Pokie', x:.32, y:.25, how:'Short over or round the block. Drive forward and stay low.'},
+  {id:'deep', group:'deep', name:'Deep corner', say:'Deep corner', x:.88, y:.92, how:'High shot to the deep cross-court corner. Turn and sprint.'},
+  {id:'seam', group:'seam', name:'Seam', say:'Seam', x:.46, y:.62, how:'Down the seam between the block and you. Short step and dig.'},
+  {id:'drive', group:'drive', name:'Hard drive', say:'Drive', x:.64, y:.6, how:'Hit straight at you. Stay low, platform out, dig in place.'}
 ];
-const SHOT_GROUPS = [['cut', 'Cuts'], ['line', 'Lines'], ['angle', 'Angles'], ['short', 'Pokie'], ['deep', 'Rainbows'], ['drive', 'Hard drive']];
-const BASE = {x:.5, y:.62};
+const SHOT_GROUPS = [['cut', 'Cuts'], ['line', 'High line'], ['angle', 'Angles'], ['short', 'Pokie'], ['deep', 'Deep corner'], ['seam', 'Seam'], ['drive', 'Hard drive']];
+const SIDES = [['left', 'Left side'], ['right', 'Right side'], ['alt', 'Swap each set'], ['mix', 'Mixed']];
+const POCKET = {x:.66, y:.55};
+const mirror = (o, side) => side === 'right' ? Object.assign({}, o, {x:1 - o.x}) : o;
+const pocketOf = side => mirror(POCKET, side);
+const sideWord = side => side === 'right' ? 'Right' : 'Left';
 const DRILL_PRESETS = {
   sprint:{
     speed:{label:'Max speed', note:'Full recovery so every rep is flat out.', reps:5, sets:2, interval:45, jitter:2, setRest:120},
@@ -867,16 +870,20 @@ function courtSVG(kind, cfg, opt = {}){
     }
   } else {
     const groups = new Set(cfg.groups);
-    if (hi) g += `<path class="ct-ball" d="M150 ${CY(0) - 6} Q ${(150 + CX(hi.x)) / 2} ${hi.group === 'deep' ? CY(0) - 40 : CY(.1)} ${CX(hi.x)} ${CY(hi.y)}"/>`;
-    if (hi) g += `<line class="ct-path" x1="${CX(BASE.x)}" y1="${CY(BASE.y)}" x2="${CX(hi.x)}" y2="${CY(hi.y)}"/>`;
-    for (const s of SHOTS){
-      const on = groups.has(s.group), isHi = hi && hi.id === s.id;
+    const side = opt.side || (cfg.side === 'right' ? 'right' : 'left');
+    const hx = side === 'right' ? .88 : .12, base = pocketOf(side), hp = hi ? mirror(hi, side) : null;
+    g += `<g class="ct-hit"><rect x="${CX(hx) - 15}" y="${CY(0) - 10}" width="30" height="7" rx="3.5"/><text x="${CX(hx)}" y="${CY(0) + 16}" text-anchor="middle">BLOCK</text></g>`;
+    if (hp) g += `<path class="ct-ball" d="M${CX(hx)} ${CY(0) - 8} Q ${(CX(hx) + CX(hp.x)) / 2} ${hp.group === 'deep' || hp.group === 'line' ? CY(0) - 46 : CY(.08)} ${CX(hp.x)} ${CY(hp.y)}"/>`;
+    if (hp) g += `<line class="ct-path" x1="${CX(base.x)}" y1="${CY(base.y)}" x2="${CX(hp.x)}" y2="${CY(hp.y)}"/>`;
+    for (const s0 of SHOTS){
+      const sp = mirror(s0, side); const on = groups.has(s0.group), isHi = hi && hi.id === s0.id;
       if (!isHi && (opt.live || !on)) continue;
-      g += `<g class="ct-spot shot${isHi ? ' hi' : ''}"><circle cx="${CX(s.x)}" cy="${CY(s.y)}" r="${isHi ? 18 : 9}"/></g>`;
+      g += `<g class="ct-spot shot${isHi ? ' hi' : ''}"><circle cx="${CX(sp.x)}" cy="${CY(sp.y)}" r="${isHi ? 18 : 9}"/></g>`;
     }
-    g += `<g class="ct-you"><circle cx="${CX(BASE.x)}" cy="${CY(BASE.y)}" r="13"/><text x="${CX(BASE.x)}" y="${CY(BASE.y) + 4}" text-anchor="middle">You</text></g>`;
+    g += `<g class="ct-you"><circle cx="${CX(base.x)}" cy="${CY(base.y)}" r="13"/><text x="${CX(base.x)}" y="${CY(base.y) + 4}" text-anchor="middle">You</text></g>`;
+    g += `<text class="ct-side" x="${CX(hx)}" y="10" text-anchor="middle">HITTER</text>`;
   }
-  return `<svg class="court" viewBox="0 0 300 330" role="img" aria-label="${kind === 'sprint' ? 'Court with eight numbered spots around you' : 'Court with your defensive base and shot targets'}">${g}</svg>`;
+  return `<svg class="court" viewBox="0 0 300 330" role="img" aria-label="${kind === 'sprint' ? 'Court with eight numbered spots around you' : `Court for a ${(opt.side || cfg.side) === 'right' ? 'right' : 'left'}-side hit, you in the pocket`}">${g}</svg>`;
 }
 
 /* Drills page */
@@ -911,12 +918,14 @@ function renderDrills(){
       </section>
       <section class="card">
         <div class="row"><h2 class="h2">Defence reactions</h2></div>
-        <p class="sub">Start in your defensive base in a ready stance. The app calls a shot; get there as fast as you can, play it, then recover to base before the next call. Mix in only the shots you want.</p>
+        <p class="sub">Your partner blocks line and you start in the pocket on the angle side, ready stance. The app calls the shot; get there as fast as you can, play it, then get back to the pocket before the next call.</p>
+        <div class="field" style="margin-top:10px"><span>Hitter attacks from</span><div class="seg" role="group" aria-label="Hitter side">${SIDES.map(([k, l]) => `<button type="button" data-dside="${k}" aria-pressed="${df.side === k}">${esc(l)}</button>`).join('')}</div></div>
+        <p class="sub">${({left:'Left side as you face the net. You start in the pocket on the right.', right:'Right side as you face the net. You start in the pocket on the left.', alt:'Left side for the first set, then it swaps each set.', mix:'The side is called before each shot ("Left… Cut"), so shift into that pocket on the call.'})[df.side]}</p>
         <div class="courtwrap">${courtSVG('defence', df)}</div>
         <div class="chipset">${SHOT_GROUPS.map(([k, l]) => `<button type="button" class="tchip" data-dgroup="${k}" aria-pressed="${df.groups.includes(k)}">${esc(l)}</button>`).join('')}</div>
         ${presetSeg('defence')}
         <div class="steps">${stepper('defence', 'reps', 'Shots per set')}${stepper('defence', 'sets', 'Sets')}${stepper('defence', 'interval', 'Time between shots', 's')}${stepper('defence', 'jitter', 'Random extra wait', 's')}${stepper('defence', 'setRest', 'Rest between sets', 's')}</div>
-        <label class="toggle"><input type="checkbox" id="d-hitter"${df.hitter ? ' checked' : ''}><span>Say "Set" just before each shot, so you split-step on the hitter's timing</span></label>
+        <label class="toggle"><input type="checkbox" id="d-hitter"${df.hitter ? ' checked' : ''}><span>Say "Set" just before each shot, so you split-step on the hitter's timing${df.side === 'mix' ? ' (in Mixed, the side call does this job)' : ''}</span></label>
         <button type="button" class="btn primary block lg" data-dstart="defence" style="margin-top:12px">Start · about ${drillMins(df)} min</button>
       </section>
       <section class="card">
@@ -945,6 +954,8 @@ drillView.addEventListener('click', ev => {
   const pr = ev.target.closest('[data-dpreset]');
   if (pr){ const [kind, k] = pr.dataset.dpreset.split('|'); const p = DRILL_PRESETS[kind][k];
     for (const f of ['reps', 'sets', 'interval', 'jitter', 'setRest']) c[kind][f] = p[f]; save(); renderDrills(); toast(p.label + ': ' + p.note); return; }
+  const sd = ev.target.closest('[data-dside]');
+  if (sd){ c.defence.side = sd.dataset.dside; save(); renderDrills(); return; }
   const gr = ev.target.closest('[data-dgroup]');
   if (gr){ const k = gr.dataset.dgroup; const set = new Set(c.defence.groups);
     if (set.has(k)){ if (set.size <= 1){ toast('Keep at least one shot type.'); return; } set.delete(k); } else set.add(k);
@@ -979,7 +990,7 @@ function openDrill(kind, presetKey, link){
   const cfg = clone(dset()[kind]);
   if (presetKey && DRILL_PRESETS[kind][presetKey]) Object.assign(cfg, DRILL_PRESETS[kind][presetKey]);
   if (link){ if (link.sets) cfg.sets = link.sets; if (link.reps) cfg.reps = link.reps; }
-  Object.assign(DR, {kind, cfg, set:0, rep:0, paused:false, cur:null, last:null, perSet:Array(cfg.sets).fill(0), link:link || null, lastBeep:-1, said5:false});
+  Object.assign(DR, {side:cfg.side === 'right' ? 'right' : 'left', kind, cfg, set:0, rep:0, paused:false, cur:null, last:null, perSet:Array(cfg.sets).fill(0), link:link || null, lastBeep:-1, said5:false});
   const el = $('#player'); el.hidden = false; el.classList.add('drill'); document.body.style.overflow = 'hidden';
   el.innerHTML = `
     <div class="ptop"><button type="button" class="btn quiet" id="d-close" aria-label="End drill">✕</button><div class="pbar"><i id="d-bar"></i></div><span class="meta" id="d-count"></span></div>
@@ -987,14 +998,14 @@ function openDrill(kind, presetKey, link){
       <div class="pstep">${esc(DRILL_NAME[kind])}</div>
       <div class="dcall" id="d-call" aria-live="assertive"></div>
       <div class="dsub" id="d-sub"></div>
-      <div class="courtwrap live" id="d-court">${courtSVG(kind, cfg, {live:true})}</div>
+      <div class="courtwrap live" id="d-court">${courtSVG(kind, cfg, {live:true, side:DR.side})}</div>
       <div class="dstatus" id="d-status"></div>
     </div>
     <div class="pctl"><button type="button" class="btn lg" id="d-end">End</button><button type="button" class="btn primary lg" id="d-pause">Pause</button><button type="button" class="btn lg" id="d-skip">Skip</button></div>`;
   $('#d-close').onclick = $('#d-end').onclick = () => finishDrill(true);
   $('#d-pause').onclick = drillPause;
   $('#d-skip').onclick = () => { if (DR.paused) return; DR.end = Date.now(); drillTick(); };
-  say(kind === 'sprint' ? 'Get ready. Start in the middle.' : 'Get ready. Start in your base.');
+  say(kind === 'sprint' ? 'Get ready. Start in the middle.' : cfg.side === 'mix' ? 'Get ready. The side is called before each shot.' : `Get ready. ${sideWord(DR.side)} side hitter. Start in the pocket.`);
   setPhase('count', 6);
   clearInterval(DR.iv); DR.iv = setInterval(drillTick, 100);
   drillHUD();
@@ -1012,12 +1023,12 @@ function showCall(t){
   call.classList.toggle('word', DR.kind !== 'sprint');
   call.classList.remove('flash'); void call.offsetWidth; call.classList.add('flash');
   sub.textContent = DR.kind === 'sprint' ? t.name : t.how;
-  court.innerHTML = courtSVG(DR.kind, DR.cfg, {hi:t, live:true});
+  court.innerHTML = courtSVG(DR.kind, DR.cfg, {hi:t, live:true, side:DR.side});
 }
 function clearCall(text){
   const call = $('#d-call'), sub = $('#d-sub'); if (!call) return;
   call.textContent = text || ''; call.classList.remove('flash'); call.classList.toggle('word', true); sub.textContent = '';
-  $('#d-court').innerHTML = courtSVG(DR.kind, DR.cfg, {live:true});
+  $('#d-court').innerHTML = courtSVG(DR.kind, DR.cfg, {live:true, side:DR.side});
 }
 function doCall(){
   const t = pickTarget(); DR.cur = t; DR.last = t;
@@ -1030,6 +1041,7 @@ function nextAfterRep(){
   if (DR.rep >= DR.cfg.reps){
     if (DR.set + 1 >= DR.cfg.sets){ finishDrill(false); return; }
     DR.set++; DR.rep = 0; DR.perSet[DR.set] = 0; drillHUD();
+    if (DR.kind === 'defence' && DR.cfg.side === 'alt') DR.side = DR.side === 'left' ? 'right' : 'left';
     say('Set done. Rest.'); tone(660, .15); setTimeout(() => tone(880, .2), 180);
     clearCall('Rest'); setPhase('rest', DR.cfg.setRest); return;
   }
@@ -1044,18 +1056,22 @@ function drillTick(){
     if (DR.paused) status.textContent = 'Paused';
     else if (DR.phase === 'count') status.textContent = `First call in ${s}…`;
     else if (DR.phase === 'rest') status.textContent = 'Rest. The next set starts on its own.';
-    else if (DR.phase === 'rep') status.textContent = ms > (DR.dur * 1000 - 2500) ? 'Go!' : (DR.kind === 'sprint' ? 'Back to the middle' : 'Back to base, ready stance');
-    else status.textContent = 'Ready…';
+    else if (DR.phase === 'rep') status.textContent = ms > (DR.dur * 1000 - 2500) ? 'Go!' : (DR.kind === 'sprint' ? 'Back to the middle' : 'Back to the pocket, ready stance');
+    else status.textContent = DR.kind === 'defence' ? `${sideWord(DR.side)}-side hitter · in the pocket` : 'Ready…';
   }
   if (DR.phase === 'count' || DR.phase === 'rest'){
     const call = $('#d-call'); if (call && !DR.paused){ call.textContent = DR.phase === 'rest' ? clock(s) : String(s); call.classList.add('word'); }
-    if (DR.phase === 'rest' && s === 6 && !DR.said5 && !DR.paused){ DR.said5 = true; say(DR.kind === 'sprint' ? 'Get ready. Back to the middle.' : 'Get ready. Back to base.'); }
+    if (DR.phase === 'rest' && s === 6 && !DR.said5 && !DR.paused){ DR.said5 = true; say(DR.kind === 'sprint' ? 'Get ready. Back to the middle.' : DR.cfg.side === 'mix' ? 'Get ready.' : `Get ready. ${sideWord(DR.side)} side hitter. Get in the pocket.`); }
   }
   if (DR.paused) return;
   if ((DR.phase === 'count' || DR.phase === 'rest') && s <= 3 && s > 0 && DR.lastBeep !== s){ DR.lastBeep = s; tone(520, .08, .18); }
   if (ms > 0) return;
   if (DR.phase === 'count' || DR.phase === 'rest'){ clearCall(''); toGap(); return; }
   if (DR.phase === 'gap'){
+    if (DR.kind === 'defence' && DR.cfg.side === 'mix'){
+      DR.side = Math.random() < .5 ? 'left' : 'right'; say(sideWord(DR.side), 1.15); tone(740, .06, .15);
+      const call = $('#d-call'); if (call){ call.textContent = sideWord(DR.side) + ' side'; call.classList.add('word'); }
+      $('#d-court').innerHTML = courtSVG('defence', DR.cfg, {live:true, side:DR.side}); setPhase('cue', rand(1.6, 2.4)); return; }
     if (DR.kind === 'defence' && DR.cfg.hitter){ say('Set', 1.2); tone(740, .06, .15); setPhase('cue', rand(.7, 1.4)); return; }
     doCall(); return;
   }
